@@ -21,12 +21,15 @@ from llmcompiler.graph.token_calculate import openai_gpt_model_token
 from llmcompiler.custom_llms.claude import Claude3LLM
 from llmcompiler.result.chat import ChatRequest
 from llmcompiler.tools.basetool.fund_basic_v1 import FundBasicV1
-from llmcompiler.tools.basetool.tool_decorator import stock_basic, fund_portfolio
+# from llmcompiler.tools.basetool.tool_decorator import stock_basic, fund_portfolio
+from llmcompiler.tools.basetool.time_tool import get_current_time, get_date_info
 from llmcompiler.tools.basic import Tools
 from llmcompiler.tools.dag.dag_flow_params import DAGFlowParams
 from llmcompiler.tools.generic.render_description import TOOL_DESC_JOIN_EXAMPLES_MARK
 from llmcompiler.tools.prompt import FILTER_TOOLS_PROMPT
 from llmcompiler.utils.thread.pool_executor import max_worker
+# Import AKShare tools registry
+from llmcompiler.tools.basetool.akshare_tools import get_akshare_tools
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +55,22 @@ class DefineTools(Tools):
         """可使用的Tools列表"""
         define_tools = [
             # FundBasic(),
-            FundBasicV1(),
-            fund_portfolio,
-            stock_basic
+            # FundBasicV1(),
+            # fund_portfolio,
+            # stock_basic,
+            get_current_time,
+            get_date_info
         ]
+        
+        # Add AKShare tools - 使用分级工具模式
+        akshare_tool_mode = "categories"  # 可选: "essential", "common", "categories", "full"
+        try:
+            akshare_tools = get_akshare_tools(tool_mode=akshare_tool_mode)
+            define_tools.extend(akshare_tools)
+            logger.info(f"已添加 {len(akshare_tools)} 个AKShare工具 (模式: {akshare_tool_mode})")
+        except Exception as e:
+            logger.error(f"加载AKShare工具失败: {str(e)}")
+            
         logger.info(f"A total of {len(define_tools)} Tools are configured.")
         return define_tools
 

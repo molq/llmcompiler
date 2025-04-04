@@ -24,12 +24,12 @@ Agent并组装它们以创建更强大的 LLMCompiler。另外已经有案例是
 
 2. 规划器 (Planner)：
 
-&emsp;用户请求首先进入“规划器”模块，这个模块的图标是一个大脑，象征着智能和决策能力（LLM）。规划器的主要职责是解析用户请求，理解其意图，并基于此生成一系列可执行的任务计划。这个计划被组织成一个有向无环图 (
+&emsp;用户请求首先进入"规划器"模块，这个模块的图标是一个大脑，象征着智能和决策能力（LLM）。规划器的主要职责是解析用户请求，理解其意图，并基于此生成一系列可执行的任务计划。这个计划被组织成一个有向无环图 (
 DAG)，代表任务的顺序与依赖关系。
 
 3. 任务DAG流 (Stream Task DAG)：
 
-&emsp;规划器生成的任务DAG流被传递给“任务获取单元” (Task Fetching Unit)
+&emsp;规划器生成的任务DAG流被传递给"任务获取单元" (Task Fetching Unit)
 。任务DAG流是一种表示任务间关系的结构，确保任务可以根据其依赖性正确地被执行。DAG流中的每个节点代表一个具体的任务，边表示任务之间的依赖关系。
 
 4. 任务获取单元 (Task Fetching Unit)：
@@ -42,7 +42,7 @@ DAG)，代表任务的顺序与依赖关系。
 
 6. 合并器（重规划器）(Joiner, Replanner)：
 
-&emsp;更新后的状态被传递到“合并器”模块，该模块同样用大脑图标表示，表明它具备复杂的决策能力。合并器的作用是根据更新后的状态进行评估，如果任务结果不足以满足用户请求，它会重新规划更多任务，并将这些任务再次提交给任务获取单元进行执行。如果任务结果已足够满足用户请求，合并器则会准备向用户反馈最终的结果。
+&emsp;更新后的状态被传递到"合并器"模块，该模块同样用大脑图标表示，表明它具备复杂的决策能力。合并器的作用是根据更新后的状态进行评估，如果任务结果不足以满足用户请求，它会重新规划更多任务，并将这些任务再次提交给任务获取单元进行执行。如果任务结果已足够满足用户请求，合并器则会准备向用户反馈最终的结果。
 
 7. 向用户反馈 (Respond to User)：
 
@@ -58,7 +58,7 @@ DAG)，代表任务的顺序与依赖关系。
 
 1. 用户输入（User Input）：
 
-&emsp;在左侧，用户通过自然语言输入一个问题，例如“微软的市值需要增加多少才能超过苹果的市值？”
+&emsp;在左侧，用户通过自然语言输入一个问题，例如"微软的市值需要增加多少才能超过苹果的市值？"
 
 2. LLM Planner（LLM 规划器）：
 
@@ -75,7 +75,7 @@ DAG)，代表任务的顺序与依赖关系。
 
 4. 执行器（Executor）：
 
-&emsp;执行器包含多个“Function Calling Units”（功能调用单元），每个单元都配备了一个工具（Tool）和内存（Memory），工具的所有调用都会在内存中暂存以供后续解析器的使用。
+&emsp;执行器包含多个"Function Calling Units"（功能调用单元），每个单元都配备了一个工具（Tool）和内存（Memory），工具的所有调用都会在内存中暂存以供后续解析器的使用。
 执行器的各个单元负责具体执行任务，例如调用搜索引擎、执行数学运算或调用LLM。
 
 5. 工具栏（Tools）：
@@ -130,4 +130,39 @@ print(llm_compiler.runWithoutJoiner())
 - [论文: An LLM Compiler for Parallel Function Calling](https://arxiv.org/abs/2312.04511)
 - [部分参考代码: LLMCompiler From Github](https://github.com/langchain-ai/langgraph/blob/main/examples/llm-compiler/LLMCompiler.ipynb)
 - [ICML 2024 LLMCompiler：一种用于并行函数调用的LLM编译器](https://github.com/SqueezeAILab/LLMCompiler)
+
+## 新增功能
+
+### AKShare 金融数据工具
+
+LLMCompiler 现已集成 [AKShare](https://akshare.akfamily.xyz/) 金融数据工具，可以方便地获取股票、基金、债券、外汇等金融市场数据。
+
+#### 主要功能
+
+- **股票数据**: 获取A股、港股、美股的历史行情、实时行情、基本面信息等
+- **基金数据**: 获取各类基金的净值、收益率、排名等信息
+- **宏观经济数据**: 获取CPI、PPI、GDP等重要经济指标数据
+- **其他金融数据**: 支持债券、期货、期权、外汇等多个金融品种的数据获取
+
+#### 使用方式
+
+AKShare工具支持多种使用模式：
+
+1. **基础工具**：提供常用的股票、基金、宏观经济数据获取功能
+2. **动态工具**：支持动态调用AKShare的所有接口
+3. **分类工具**：按照金融品种分类提供数据获取功能
+4. **全功能模式**：集成上述所有功能
+
+您可以在 `tools.py` 中配置AKShare工具的模式：
+
+```python
+# 配置AKShare工具模式
+akshare_tool_mode = "categories"  # 可选: "essential", "common", "categories", "full"
+```
+
+#### 示例查询
+
+- 查询股票历史行情: `stock_zh_a_hist("sh000001", start_date="2023-01-01", end_date="2023-01-10")`
+- 查询基金净值: `fund_em_open_fund_info("000001", indicator="单位净值走势")`
+- 查询宏观数据: `macro_china_cpi_yearly()`
 

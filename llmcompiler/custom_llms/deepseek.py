@@ -1,27 +1,28 @@
 # -*- coding: utf-8 -*-
 """
 @Author  : Yc-Ma
-@Desc    : LLMCompiler
+@Desc    : DeepSeek LLM Implementation
 @Time    : 2024-08-02 09:30:49
 """
 import inspect
 import logging
-from typing import Any, List, Optional, Tuple, Mapping
+from typing import Any, List, Optional, Tuple, Mapping, Dict
 
 from langchain.callbacks.manager import CallbackManagerForLLMRun, Callbacks
 from langchain.llms.base import LLM
-from langchain.schema import LLMResult, Generation, PromptValue
+from langchain.schema import LLMResult, Generation, PromptValue, SystemMessage, HumanMessage
+from openai import OpenAI
 
 
-class OpenaiLLM(LLM):
+class DeepSeekLLM(LLM):
     temperature: float = 0.0
 
     # 模型标记字段
-    type: str = "jsfund-gpt-3.5-turbo"
-    # 定义模型名称【使用openai哪个模型】
-    model: str = "gpt-3.5-turbo"
+    type: str = "deepseek-chat"
+    # 定义模型名称
+    model: str = "deepseek-chat"
     # 内部标记模型类别
-    model_name: str = "jsfund-gpt-3.5-turbo"
+    model_name: str = "deepseek-chat"
 
     # 提示词DEBUG模式
     debug: bool = False
@@ -32,6 +33,10 @@ class OpenaiLLM(LLM):
     max_retries: int = 3
     # 接口超时时间，默认300s
     timeout = 300
+    # API KEY
+    api_key: Optional[str] = None
+    # 基础URL(可选)
+    base_url: Optional[str] = None
 
     @property
     def _llm_type(self) -> str:
@@ -44,7 +49,6 @@ class OpenaiLLM(LLM):
             callbacks: Callbacks = None,
             **kwargs: Any,
     ) -> LLMResult:
-        # prompt_strings = [p.to_string() for p in prompts]
         return self._generate(prompts, stop=stop, callbacks=callbacks, **kwargs)
 
     def _generate(
@@ -54,8 +58,7 @@ class OpenaiLLM(LLM):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> LLMResult:
-        """Run the LLM on the given prompt and input."""
-        # TODO: add caching here.
+        """运行LLM，处理给定的提示和输入。"""
         generations = []
         new_arg_supported = inspect.signature(self._call).parameters.get("run_manager")
 
@@ -75,28 +78,29 @@ class OpenaiLLM(LLM):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs
     ) -> str:
-        # if stop is not None:
-        #     raise ValueError("stop kwargs are not permitted.")
-        return self.api(prompt)
+        return self.api(prompt, stop=stop)
 
     @property
     def _identifying_params(self) -> Mapping[str, Any]:
-        """Get the identifying parameters."""
-        return {"type": self.type}
+        """获取标识参数。"""
+        return {"type": self.type, "model": self.model}
 
-    def api(self, prompt: PromptValue):
-        """调用OpenAI API获取响应"""
+    def api(self, prompt: PromptValue, stop: Optional[List[str]] = None) -> str:
+        """调用DeepSeek API。"""
         messages = self.pack(prompt)
         
-        # 调试模式输出请求消息
+        # 调试模式输出消息内容
         if self.debug:
-            logging.info(f"OpenAI API Messages: {messages}")
+            logging.info(f"DeepSeek API Messages: {messages}")
+            
+        client_params = {"api_key": self.api_key}
+        if self.base_url:
+            client_params["base_url"] = self.base_url
+            
+        client = OpenAI(**client_params)
         
         retries = 0
-        
-        # 从此处开始添加OpenAI API的实际调用
-        import openai
-        client = openai.OpenAI()
+        result = None
         
         while retries < self.max_retries:
             try:
@@ -104,27 +108,38 @@ class OpenaiLLM(LLM):
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
+                    stop=stop,
                     timeout=self.timeout
                 )
                 response_content = response.choices[0].message.content
                 
                 # 添加大模型返回数据的日志记录
-                logging.info(f"OpenAI API Response: {response_content}")
+                logging.info(f"DeepSeek API Response: {response_content}")
                 
                 return response_content
             except Exception as e:
                 retries += 1
                 if retries == self.max_retries:
-                    logging.error(f"OpenAI API调用失败: {str(e)}")
+                    logging.error(f"API调用失败: {str(e)}")
                     return f"API请求在达到最大重试次数后失败: {str(e)}"
                 else:
-                    logging.debug(f"重试OpenAI API请求... (第{retries}次)")
+                    logging.debug(f"重试API请求... (第{retries}次)")
         
-        return "OpenAI API请求失败"
+        return "API请求失败"
 
-    def pack(self, prompt: PromptValue) -> List:
+    def pack(self, prompt):
         messages = []
-        if type(prompt) != str:
+        if isinstance(prompt, list) and all(isinstance(m, (SystemMessage, HumanMessage)) for m in prompt):
+            # 处理消息列表
+            for me in prompt:
+                if isinstance(me, SystemMessage):
+                    data = {"role": "system", "content": me.content}
+                elif isinstance(me, HumanMessage):
+                    data = {"role": "user", "content": me.content}
+                # ... 其他类型
+                messages.append(data)
+        elif hasattr(prompt, "to_messages"):
+            # 处理 PromptValue 对象
             mes = prompt.to_messages()
             for me in mes:
                 if me.type == "system":
@@ -137,20 +152,38 @@ class OpenaiLLM(LLM):
                         "role": "assistant",
                         "content": me.content
                     }
-                else:
+                elif me.type == "function":
+                    # 关键修改：将function角色转换为tool角色
+                    # data = {
+                    #     "role": "tool",
+                    #     "content": me.content
+                    # }
+                    data = {
+                        "role": "user",
+                        "content": f"工具结果: {me.content}"
+                    }
+                elif me.type == "human":
                     data = {
                         "role": "user",
                         "content": me.content
                     }
-
+                else:
+                    # 处理其他类型的消息，如ChatMessage
+                    role = me.type
+                    # 如果角色是'function'，转换为'tool'
+                    if role == "function":
+                        role = "tool"
+                    data = {
+                        "role": role,
+                        "content": me.content
+                    }
                 messages.append(data)
         else:
-            data = {
-                "role": "user",
-                "content": prompt
-            }
+            # 处理字符串或其他类型
+            data = {"role": "user", "content": str(prompt)}
             messages.append(data)
         return messages
 
     def debug_prompt(self, debug: bool):
+        """设置调试模式。"""
         self.debug = debug

@@ -696,9 +696,13 @@ class PlanAndSchedule:
     def init(self, messages: List[BaseMessage], config):
         planner = Planer(self.llm, self.tools, self.re_llm, self.custom_prompts).init()
         tasks = planner.stream(messages, config)
+  
         # Begin executing the planner immediately
         try:
             tasks = itertools.chain([next(tasks)], tasks)
+            print("-------------tasks-------------------")
+            print(tasks)
+            print("--------------------------------")
         except StopIteration:
             tasks = iter([])
 

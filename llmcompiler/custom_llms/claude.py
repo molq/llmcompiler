@@ -74,47 +74,80 @@ class Claude3LLM(LLM):
         return self.api(prompt)
 
     def api(self, prompt: PromptValue):
+        """调用Claude API获取响应"""
         messages, system = self.pack(prompt)
+        
+        # 调试模式输出请求消息
+        if self.debug:
+            logging.info(f"Claude API Messages: {messages}")
+            if system:
+                logging.info(f"Claude API System: {system}")
+        
         retries = 0
-        result = None
+        
+        # 添加Claude API的实际调用
+        import anthropic
+        client = anthropic.Anthropic()
+        
         while retries < self.max_retries:
             try:
-                # LLM API REQUEST
-                break
+                # 构建Claude请求
+                if system:
+                    response = client.messages.create(
+                        model=self.model,
+                        system=system,
+                        messages=messages,
+                        temperature=self.temperature,
+                        max_tokens=4096
+                    )
+                else:
+                    response = client.messages.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=self.temperature,
+                        max_tokens=4096
+                    )
+                
+                response_content = response.content[0].text
+                
+                # 添加大模型返回数据的日志记录
+                logging.info(f"Claude API Response: {response_content}")
+                
+                return response_content
             except Exception as e:
                 retries += 1
                 if retries == self.max_retries:
-                    logging.error(e)
-                    return "API request failed after maximum retries"
+                    logging.error(f"Claude API调用失败: {str(e)}")
+                    return f"API请求在达到最大重试次数后失败: {str(e)}"
                 else:
-                    logging.debug("Retry API request...")
-
-    def pack(self, prompt: PromptValue) -> Tuple[List, str]:
+                    logging.debug(f"重试Claude API请求... (第{retries}次)")
+        
+        return "Claude API请求失败"
+    
+    def pack(self, prompt: PromptValue) -> Tuple[List, Optional[str]]:
+        """将提示转换为Claude API格式的消息和系统提示"""
         messages = []
-        system = ""
-        if type(prompt) != str:
+        system = None
+        
+        if hasattr(prompt, "to_messages"):
             mes = prompt.to_messages()
             for me in mes:
                 if me.type == "system":
-                    system += me.content
+                    system = me.content
                 elif me.type == "ai":
-                    data = {
-                        "role": "assistant",
-                        "content": me.content
-                    }
-                    messages.append(data)
+                    messages.append({"role": "assistant", "content": me.content})
+                elif me.type == "human":
+                    messages.append({"role": "user", "content": me.content})
+                elif me.type == "function":
+                    # 将工具/函数响应转为用户消息
+                    messages.append({"role": "user", "content": f"工具结果: {me.content}"})
                 else:
-                    data = {
-                        "role": "user",
-                        "content": me.content
-                    }
-                    messages.append(data)
+                    # 默认作为用户消息
+                    messages.append({"role": "user", "content": me.content})
         else:
-            data = {
-                "role": "user",
-                "content": prompt
-            }
-            messages.append(data)
+            # 处理字符串提示
+            messages.append({"role": "user", "content": str(prompt)})
+        
         return messages, system
 
     def debug_prompt(self, debug: bool):

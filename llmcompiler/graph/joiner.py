@@ -103,7 +103,7 @@ class Joiner:
                 break
             # Chat Message是从Joiner决定Replan时加入的，再次进行Joiner时不需要保留额外信息所以重置content
             elif isinstance(msg, ChatMessage):
-                msg.content = "Let’s think step by step!"
+                msg.content = "Let's think step by step!"
         return {"messages": selected[::-1]}
 
     def joiner_message_template(self):
@@ -134,7 +134,7 @@ class JoinerParser(BaseLLMOutputParser):
             print("================================ Joiner ================================")
             print(text)
             response = parse_json_markdown(text)
-            thought = response.get('_thought_', 'Let’s think step by step!')
+            thought = response.get('_thought_', "Let's think step by step!")
             if '_finish_' in response:
                 response = response.get('_finish_', '')
                 return JoinOutputs(thought=thought, action=FinalResponse(response=response))
@@ -161,12 +161,12 @@ class JoinerParser(BaseLLMOutputParser):
             elif "_replan_" in text:
                 return self.parse_action(text)
             elif any(tool for tool in list(self.tools) if tool.name in text):
-                return JoinOutputs(thought="Let’s think step by step!", action=Replan(feedback=text))
+                return JoinOutputs(thought="Let's think step by step!", action=Replan(feedback=text))
             elif '_thought_' not in text and '_finish_' not in text and '_replan_' not in text:
-                return JoinOutputs(thought="Let’s think step by step!", action=FinalResponse(response=text))
+                return JoinOutputs(thought="Let's think step by step!", action=FinalResponse(response=text))
         except Exception as e:
             logging.error(f"Could not parse LLM output: {text}\n{str(e)}")
-        return JoinOutputs(thought="Let’s think step by step!", action=FinalResponse(response="Error Answer"))
+        return JoinOutputs(thought="Let's think step by step!", action=FinalResponse(response="Error Answer"))
 
     def parse_final_answer(self, text: str) -> JoinOutputs:
         """
@@ -176,7 +176,7 @@ class JoinerParser(BaseLLMOutputParser):
         def escape_json_strings(text: str) -> JoinOutputs:
             response = text.split("_finish_")[1]
             response = re.sub(r'^[^a-zA-Z0-9\u4e00-\u9fa5]+|[^a-zA-Z0-9\u4e00-\u9fa5]+$', '', response)
-            return JoinOutputs(thought="Let’s think step by step!", action=FinalResponse(response=response))
+            return JoinOutputs(thought="Let's think step by step!", action=FinalResponse(response=response))
 
         json_texts = re.findall(r'json\n({.*?})\n', text, re.DOTALL)
         actions = [escape_json_strings(json_text) for json_text in json_texts]
@@ -225,15 +225,17 @@ class JoinerParser(BaseLLMOutputParser):
             return JoinOutputs(thought=_thought_, action=Replan(feedback=_replan_))
 
     def _parse_joiner_output(self, decision: JoinOutputs) -> List[BaseMessage]:
+        # 检查 response 是否为 None
+        response_content = "工具调用失败，无法获取结果" if decision.action.response is None else decision.action.response
         response = [AIMessage(content=f"Thought: {decision.thought}")]
         if isinstance(decision.action, Replan):
             system_message = SystemMessage(content=f"\nContext from last attempt: {decision.action.feedback}\n\n")
-            chat_message = ChatMessage(role="user", content="Let’s think step by step!")
+            chat_message = ChatMessage(role="user", content="Let's think step by step!")
             response.append(system_message)
             response.append(chat_message)
             return response
         else:
-            return response + [AIMessage(content=decision.action.response)]
+            return response + [AIMessage(content=response_content)]
 
 
 if __name__ == '__main__':

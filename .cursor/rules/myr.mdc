@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+运行python时，先激活虚拟环境 命令：.venv\Scripts\activate
+安装包时，请使用uv包管理，例如：uv pip install -r requirements.txt
+回答问题时，请将中文设为主语言

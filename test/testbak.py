@@ -28,7 +28,7 @@ def run(chat: ChatRequest) -> ChatResponse:
     """
     Run test.
     """
-    c3_sonnet: Claude3LLM = Claude3LLM(model="anthropic.claude-3-sonnet-20240229-v1:0")
+    c3_sonnet: Claude3LLM = Claude3LLM(model="anthropic.claude-3-7-sonnet-20250219:0")
     swi_c3_sonnet = SwitchLLM(llm=c3_sonnet, max_token=200 * 1024, out_token=4 * 1024, order=3)
     default_tools = DefineTools().tools()
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     chat = ChatRequest(message=message, session_id="session-id0", create_time=formatted_dt_now())
 
     tools = DefineTools().tools()
-    llm = ChatOpenAI(model="gpt-4o", temperature=0, max_retries=3, model_kwargs={'stream': False})
+    llm = ChatOpenAI(model="deepseek-chat", temperature=0, max_retries=3, model_kwargs={'stream': False})
     llm_compiler = RunLLMCompiler(chat, tools, llm)
 
     # result = llm_compiler()
